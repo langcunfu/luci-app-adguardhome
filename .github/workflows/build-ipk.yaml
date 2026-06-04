@@ -82,8 +82,8 @@ jobs:
         with:
           name: pkg-${{ github.ref_name }}
           path: |
-            _sdk/**/bin/packages/**/luci-app-adguardhome*.ipk
-            _sdk/**/bin/packages/**/luci-i18n-adguardhome*.ipk
+            _sdk/**/luci/luci-app-adguardhome*.ipk
+            _sdk/**/luci-i18n/luci-i18n-adguardhome*.ipk
           if-no-files-found: error
 
       - name: 发布到 Releases
@@ -91,5 +91,5 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           files: |
-            _sdk/**/bin/packages/**/luci-app-adguardhome*.ipk
-            _sdk/**/bin/packages/**/luci-i18n-adguardhome*.ipk
+            _sdk/**/luci/luci-app-adguardhome*.ipk
+            _sdk/**/luci-i18n/luci-i18n-adguardhome*.ipk
