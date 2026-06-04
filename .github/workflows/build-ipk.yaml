@@ -2,7 +2,7 @@ name: build-ipk
 
 on:
   push:
-    tags: ['*']
+  workflow_dispatch:
 
 permissions:
   contents: write
