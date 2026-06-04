@@ -11,7 +11,6 @@ env:
   TARGET: x86
   SUBTARGET: 64
   PKG_DIR_NAME: luci-app-adguardhome
-  SDK_URL: https://downloads.immortalwrt.org/releases/24.10.6/targets/x86/64/immortalwrt-sdk-24.10.6-x86-64_gcc-13.3.0_musl.Linux-x86_64.tar.zst
 
 jobs:
   build:
@@ -81,15 +80,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pkg-${{ github.ref_name }}
-          path: |
-            _sdk/**/luci/luci-app-adguardhome*.ipk
-            _sdk/**/luci-i18n/luci-i18n-adguardhome*.ipk
+          path: _sdk/**/bin/packages/**/${{ env.PKG_DIR_NAME }}*
           if-no-files-found: error
 
       - name: 发布到 Releases
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
-          files: |
-            _sdk/**/luci/luci-app-adguardhome*.ipk
-            _sdk/**/luci-i18n/luci-i18n-adguardhome*.ipk
+          files: _sdk/**/bin/packages/**/${{ env.PKG_DIR_NAME }}*
