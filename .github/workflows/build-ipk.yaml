@@ -81,11 +81,15 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pkg-${{ github.ref_name }}
-          path: _sdk/**/bin/packages/**/${{ env.PKG_DIR_NAME }}*
+          path: |
+            _sdk/**/bin/packages/**/luci-app-adguardhome*.ipk
+            _sdk/**/bin/packages/**/luci-i18n-adguardhome*.ipk
           if-no-files-found: error
 
       - name: 发布到 Releases
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.ref_name }}
-          files: _sdk/**/bin/packages/**/${{ env.PKG_DIR_NAME }}*
+          files: |
+            _sdk/**/bin/packages/**/luci-app-adguardhome*.ipk
+            _sdk/**/bin/packages/**/luci-i18n-adguardhome*.ipk
