@@ -24,7 +24,7 @@ define Package/luci-app-adguardhome
 	TITLE:=LuCI app for AdGuardHome
 	PKG_MAINTAINER:=https://github.com/w9315273/luci-app-adguardhome
 	PKGARCH:=all
-	DEPENDS:=+luci-base +rpcd-mod-ucode +uclient-fetch +jsonfilter +flock +ca-bundle +!PACKAGE_libustream-openssl&&!PACKAGE_libustream-wolfssl:libustream-mbedtls +tar
+	DEPENDS:=+luci-base +rpcd-mod-ucode +uclient-fetch +jsonfilter +flock +ca-bundle +!(PACKAGE_libustream-openssl||PACKAGE_libustream-wolfssl):libustream-mbedtls +tar
 endef
 
 define Package/luci-app-adguardhome/description
