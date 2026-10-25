@@ -138,20 +138,11 @@ jobs:
             exit 1
           fi
           cp "${packages[@]}" "$GITHUB_WORKSPACE/dist/"
-          cd "$GITHUB_WORKSPACE/dist"
-          sha256sum ./*.apk > SHA256SUMS
 
       - name: 上传独立 APK
         uses: actions/upload-artifact@v7
         with:
           path: dist/*.apk
-          archive: false
-          if-no-files-found: error
-
-      - name: 上传校验文件
-        uses: actions/upload-artifact@v7
-        with:
-          path: dist/SHA256SUMS
           archive: false
           if-no-files-found: error
 
@@ -163,6 +154,4 @@ jobs:
           prerelease: ${{ startsWith(github.ref_name, 'dev-') }}
           make_latest: ${{ startsWith(github.ref_name, 'dev-') && 'false' || 'true' }}
           fail_on_unmatched_files: true
-          files: |
-            dist/*.apk
-            dist/SHA256SUMS
+          files: dist/*.apk
