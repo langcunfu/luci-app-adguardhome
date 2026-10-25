@@ -8,7 +8,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-adguardhome
 PKG_VERSION:=2.4.1
-PKG_RELEASE:=1
+PKG_RELEASE:=2
 
 PKG_LICENSE:=MIT
 PKG_LICENSE_FILES:=LICENSE
@@ -63,7 +63,7 @@ fi
 
 # Remove the former menu definition when upgrading.
 rm -f /usr/share/luci/menu.d/luci-app-adguardhome-js.json
-rm -f /tmp/luci-indexcache
+rm -f /tmp/luci-indexcache /tmp/luci-indexcache.*
 rm -f /tmp/luci-modulecache/*
 /etc/init.d/rpcd reload
 
