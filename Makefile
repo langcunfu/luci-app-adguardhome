@@ -61,6 +61,8 @@ if [ "$$enable" = "1" ]; then
 	/etc/init.d/AdGuardHome reload
 fi
 
+# Remove the former menu definition when upgrading.
+rm -f /usr/share/luci/menu.d/luci-app-adguardhome-js.json
 rm -f /tmp/luci-indexcache
 rm -f /tmp/luci-modulecache/*
 /etc/init.d/rpcd reload

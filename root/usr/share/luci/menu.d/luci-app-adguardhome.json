@@ -1,6 +1,6 @@
 {
-        "admin/services/AdGuardHomeJS": {
-                "title": "AdGuard Home JS",
+        "admin/services/AdGuardHome": {
+                "title": "AdGuard Home",
                 "order": 12,
                 "action": {
                         "type": "firstchild"
@@ -9,7 +9,7 @@
                         "acl": [ "luci-app-adguardhome" ]
                 }
         },
-        "admin/services/AdGuardHomeJS/base": {
+        "admin/services/AdGuardHome/base": {
                 "title": "Base Setting",
                 "order": 1,
                 "action": {
@@ -20,7 +20,7 @@
                         "acl": [ "luci-app-adguardhome" ]
                 }
         },
-        "admin/services/AdGuardHomeJS/log": {
+        "admin/services/AdGuardHome/log": {
                 "title": "Log",
                 "order": 3,
                 "action": {
@@ -31,7 +31,7 @@
                         "acl": [ "luci-app-adguardhome" ]
                 }
         },
-        "admin/services/AdGuardHomeJS/manual": {
+        "admin/services/AdGuardHome/manual": {
                 "title": "Manual Config",
                 "order": 2,
                 "action": {

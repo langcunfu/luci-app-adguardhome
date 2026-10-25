@@ -1,0 +1,153 @@
+/* Scoped to the settings and log cards; shared status badges keep their layout. */
+.agh-compact-card {
+	margin-bottom: 0.75rem;
+}
+.agh-compact-card .cbi-value {
+	margin-bottom: 0;
+	padding-top: 0.35rem;
+	padding-bottom: 0.35rem;
+}
+.agh-compact-card .cbi-value-description {
+	margin-top: 0.25rem;
+}
+.agh-compact-card .agh-toolbar {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 0.5rem 0.75rem;
+}
+.agh-compact-card .agh-toolbar > * {
+	margin: 0;
+}
+.agh-compact-card .agh-update-content {
+	width: 100%;
+	max-width: 40rem;
+	min-width: 0;
+}
+.agh-compact-card .agh-update-options {
+	align-items: center;
+	gap: 0.35rem;
+	width: auto;
+	margin: 0.5rem 0 0;
+	padding: 0;
+	float: none;
+}
+.agh-compact-card .agh-update-options input[type="checkbox"] {
+	position: static;
+	flex: 0 0 auto;
+	margin: 0;
+}
+.agh-compact-card textarea.agh-update-log {
+	width: 100%;
+	height: 10rem;
+	min-height: 6rem;
+	box-sizing: border-box;
+	resize: vertical;
+	margin: 0.35rem 0 0;
+}
+.agh-log-view {
+	padding: 0.6em;
+}
+.agh-log-view textarea {
+	display: block;
+	width: 100%;
+	height: clamp(12rem, 32vh, 20rem);
+	min-height: 10rem;
+	box-sizing: border-box;
+	resize: vertical;
+	margin: 0 0 0.6em;
+}
+
+.agh-manual-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 0.5rem 1rem;
+	padding: 0;
+}
+.agh-compact-card .agh-password-controls label {
+	float: none;
+	width: auto;
+	padding: 0;
+}
+.agh-compact-card .agh-password-controls input {
+	width: 14rem;
+	max-width: 100%;
+	min-width: 0;
+}
+
+.agh-manual-card {
+	padding: 0.6em;
+}
+.agh-editor-wrap {
+	margin: 0 0 0.6em;
+}
+.agh-config-actions {
+	margin-left: auto;
+}
+
+/* Keep the base card heading in the theme's original position. */
+.agh-base-card .cbi-section-node {
+	margin: 0;
+	padding: 0.6em;
+}
+.agh-log-view .agh-log-controls {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	gap: 0.6em 1.2em;
+	width: 100%;
+	margin: 0;
+	padding: 0;
+	text-align: left;
+}
+.agh-log-view .agh-log-toggles {
+	justify-content: flex-start;
+	flex: 0 1 auto;
+}
+.agh-log-view .agh-log-actions {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	gap: 0.6em 1.2em;
+	flex: 0 1 auto;
+	min-width: 0;
+	margin-left: auto;
+}
+.agh-log-view .agh-log-actions > .cbi-value {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	flex: 0 1 auto;
+	gap: 0.5em;
+	width: auto;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+	border: 0;
+}
+.agh-log-view .agh-log-actions .cbi-value-title {
+	float: none;
+	flex: 0 0 auto;
+	width: auto;
+	margin: 0;
+	padding: 0;
+}
+.agh-log-view .agh-log-actions .cbi-value-field {
+	flex: 0 1 auto;
+	width: auto;
+	min-width: 0;
+	margin: 0;
+	padding: 0;
+}
+.agh-log-view .agh-log-actions .cbi-value-field input {
+	width: 22em;
+	max-width: 100%;
+	box-sizing: border-box;
+}
+.agh-log-controls .agh-toolbar > span:empty {
+	display: none;
+}

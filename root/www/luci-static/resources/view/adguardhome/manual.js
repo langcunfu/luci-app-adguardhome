@@ -102,11 +102,11 @@ return view.extend({
 		var message = E('span', { 'style': 'margin-left:0.8em;' }, '');
 		var configArea = E('textarea', {
 			'class': 'cbi-input-textarea',
-			'rows': 40,
+			'rows': 20,
 			'wrap': 'off',
 			'style': 'width:100%;box-sizing:border-box;font-family:monospace;'
 		});
-		var editorWrap = E('div', { 'style': 'padding:0.6em;' }, configArea);
+		var editorWrap = E('div', { 'class': 'agh-editor-wrap' }, configArea);
 		var templateButton = E('button', {
 			'class': 'btn cbi-button', 'type': 'button'
 		}, _('Use template'));
@@ -118,22 +118,15 @@ return view.extend({
 		}, _('Save & Apply'));
 		var passwordInput = E('input', {
 			'class': 'cbi-input-password', 'type': 'password',
-			'autocomplete': 'new-password', 'spellcheck': 'false'
+			'id': 'agh-web-password', 'autocomplete': 'new-password', 'spellcheck': 'false'
 		});
 		var passwordButton = E('button', {
 			'class': 'btn cbi-button cbi-button-apply', 'type': 'button'
 		}, _('Change password'));
 		var passwordMessage = E('span', { 'style': 'margin-left:0.8em;' }, '');
-		var passwordPanel = E('div', { 'class': 'cbi-section' }, [
-			E('h3', {}, _('Change browser management password')),
-			E('div', { 'class': 'cbi-value', 'style': 'padding:0.6em 0;' }, [
-				E('label', { 'class': 'cbi-value-title' }, _('New password')),
-				E('div', { 'class': 'cbi-value-field' }, [
-					passwordInput,
-					E('span', { 'style': 'margin-left:0.6em;' }, passwordButton),
-					passwordMessage
-				])
-			])
+		var passwordPanel = E('div', { 'class': 'agh-toolbar agh-password-controls' }, [
+			E('label', { 'for': 'agh-web-password' }, _('Change browser management password')),
+			passwordInput, passwordButton, passwordMessage
 		]);
 
 		function showConfig() {
@@ -207,14 +200,15 @@ return view.extend({
 		showConfig();
 
 		var page = E('div', {}, [
+			E('link', { 'rel': 'stylesheet', 'href': L.resource('view/adguardhome/compact.css') }),
 			sharedStatus.node,
-			E('div', { 'class': 'cbi-section' }, [
-				E('div', { 'style': 'padding:0.6em;' }, [
-					templateButton, reloadButton, saveButton, message
-				]),
-				editorWrap
-			]),
-			passwordPanel
+			E('div', { 'class': 'cbi-section agh-compact-card agh-manual-card' }, [
+				editorWrap,
+				E('div', { 'class': 'agh-manual-toolbar' }, [
+					passwordPanel,
+					E('div', { 'class': 'agh-toolbar agh-config-actions' }, [message, templateButton, reloadButton, saveButton])
+				])
+			])
 		]);
 		loadCodeMirror().then(function(CodeMirror) {
 			editor = CodeMirror.fromTextArea(configArea, {
@@ -226,6 +220,8 @@ return view.extend({
 			});
 			editor.getWrapperElement().style.fontSize = '15px';
 			editor.getWrapperElement().style.lineHeight = '1.5';
+			// Twenty lines at 1.5em, plus CodeMirror's vertical content padding.
+			editor.setSize(null, 'calc(30em + 8px)');
 			editor.refresh();
 			showConfig();
 		}).catch(function() {

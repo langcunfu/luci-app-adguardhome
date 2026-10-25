@@ -85,14 +85,13 @@ return view.extend({
 		o = s.option(
 			form.ListValue,
 			'redirect',
-			_('Redirect mode'),
-			_('AdGuardHome redirect mode')
+			_('DNS handling mode')
 		);
 
 		this.redirectOption = o;
-		o.value('none', _('None'));
+		o.value('none', _('Do not handle DNS'));
+		o.value('redirect', _('Forward port 53 requests through the firewall (recommended)'));
 		o.value('dnsmasq-upstream', _('Run as dnsmasq upstream server'));
-		o.value('redirect', _('Redirect port 53 to AdGuardHome'));
 		o.value('exchange', _('Use port 53 instead of dnsmasq'));
 
 		o.default = 'none';
@@ -101,9 +100,11 @@ return view.extend({
 		o = s.option(
 			form.DynamicList,
 			'wan_ifname',
-			_('WAN Interface'),
-			_('Only effective in redirect mode, bypass specified interfaces to avoid becoming a public DNS resolver')
+			_('Interfaces excluded from forwarding'),
+			_('DNS requests arriving on these interfaces are not forwarded to AdGuardHome')
 		);
+		o.depends('redirect', 'redirect');
+		o.retain = true;
 		o.datatype = 'string';
 		o.rmempty = true;
 		interfaces.filter(function(name) { return name !== 'lo'; }).forEach(function(name) {
@@ -113,8 +114,7 @@ return view.extend({
 		o = s.option(
 			form.Value,
 			'binpath',
-			_('Bin Path'),
-			_('AdGuardHome binary path')
+			_('Bin Path')
 		);
 		o.default = '/usr/bin/AdGuardHome/AdGuardHome';
 		o.rmempty = false;
@@ -122,8 +122,7 @@ return view.extend({
 		o = s.option(
 			form.Value,
 			'configpath',
-			_('Config Path'),
-			_('AdGuardHome config path')
+			_('Config Path')
 		);
 		o.default = '/etc/AdGuardHome.yaml';
 		o.rmempty = false;
@@ -131,27 +130,11 @@ return view.extend({
 		o = s.option(
 			form.Value,
 			'workdir',
-			_('Work dir'),
-			_('AdGuardHome work dir including rules, audit log and database')
+			_('Work dir')
 		);
 		o.default = '/usr/bin/AdGuardHome';
 		o.rmempty = false;
 
-		o = s.option(
-			form.Value,
-			'logfile',
-			_('Runtime log file'),
-			_('If set to "syslog", write to system log; if empty, disable file logging')
-		);
-		o.rmempty = true;
-
-		o = s.option(
-			form.Flag,
-			'verbose',
-			_('Verbose log')
-		);
-		o.default = '0';
-		o.rmempty = true;
 
 		return m.render().then(function(node) {
 			var sharedStatus = status.render();
@@ -161,21 +144,23 @@ return view.extend({
 				'class': 'btn cbi-button cbi-button-apply', 'type': 'button'
 			}, _('Update core version'));
 			var forceButton = E('button', {
-				'class': 'btn cbi-button', 'type': 'button', 'style': 'margin-left:0.6em;'
+				'class': 'btn cbi-button', 'type': 'button'
 			}, _('Force update'));
-			var updateMessage = E('span', { 'style': 'margin-left:0.8em;' }, '');
+			var updateMessage = E('span', {}, '');
 			var reverseLog = E('input', { 'type': 'checkbox' });
 			var updateLog = E('textarea', {
-				'class': 'cbi-input-textarea', 'rows': 8, 'readonly': 'readonly',
-				'style': 'display:none;width:100%;margin-top:0.6em;box-sizing:border-box;'
+				'class': 'cbi-input-textarea agh-update-log', 'rows': 8, 'readonly': 'readonly',
+				'style': 'display:none;'
 			});
-			var logOptions = E('label', { 'style': 'display:none;margin-top:0.6em;' }, [
-				reverseLog, ' ' + _('reverse')
+			var logOptions = E('label', { 'class': 'agh-update-options', 'style': 'display:none;' }, [
+				reverseLog, E('span', {}, _('reverse'))
 			]);
-			var updatePanel = E('div', { 'class': 'cbi-section' }, [
-				E('h3', {}, _('Upgrade Core')),
-				E('div', { 'style': 'padding:0.6em;' }, [updateButton, forceButton, updateMessage]),
-				logOptions, updateLog
+			var updatePanel = E('div', { 'class': 'cbi-value' }, [
+				E('div', { 'class': 'cbi-value-title' }, _('Upgrade Core')),
+				E('div', { 'class': 'cbi-value-field' }, E('div', { 'class': 'agh-update-content' }, [
+					E('div', { 'class': 'agh-toolbar' }, [updateButton, forceButton, updateMessage]),
+					logOptions, updateLog
+				]))
 			]);
 			var lastLog = '';
 			var startingAt = 0;
@@ -205,7 +190,8 @@ return view.extend({
 					updateMessage.textContent = state === 'running' ? _('Check...') :
 						state === 'finished' ? _('Updated') : _('Update failed');
 					lastLog = result.log || '';
-					logOptions.style.display = updateLog.style.display = lastLog ? 'block' : 'none';
+					logOptions.style.display = lastLog ? 'inline-flex' : 'none';
+					updateLog.style.display = lastLog ? 'block' : 'none';
 					showLog();
 				} else {
 					updateMessage.textContent = '';
@@ -246,8 +232,14 @@ return view.extend({
 					updateMessage.textContent = _('Update status unavailable');
 				});
 			}, 3);
+			var settingsCard = node.querySelector('.cbi-section');
+			settingsCard.classList.add('agh-compact-card', 'agh-base-card');
+			var settingsFields = settingsCard.querySelector('.cbi-section-node') || settingsCard;
+			settingsFields.appendChild(updatePanel);
 			node.insertBefore(sharedStatus.node, node.firstChild);
-			sharedStatus.node.parentNode.insertBefore(updatePanel, sharedStatus.node.nextSibling);
+			node.insertBefore(E('link', {
+				'rel': 'stylesheet', 'href': L.resource('view/adguardhome/compact.css')
+			}), node.firstChild);
 
 			var portInput = node.querySelector('[data-name="httpport"] input');
 			var portField = node.querySelector('[data-name="httpport"] .cbi-value-field');
@@ -258,7 +250,7 @@ return view.extend({
 					'target': '_blank',
 					'value': _('AdGuardHome Web')
 				});
-				var linkWrap = E('div', { 'style': 'margin-top:0.6em;' }, webLink);
+				var linkWrap = E('div', { 'style': 'margin-top:0.35rem;' }, webLink);
 				var host = window.location.hostname;
 				if (host.indexOf(':') >= 0 && host.charAt(0) !== '[')
 					host = '[' + host + ']';

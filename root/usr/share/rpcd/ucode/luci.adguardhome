@@ -181,6 +181,20 @@ return {
 				return { changed: true };
 			}
 		},
+		setVerboseLog: {
+			args: { enabled: false },
+			call: function(request) {
+				const conf = cursor();
+				if (!conf.set('AdGuardHome', 'AdGuardHome', 'verbose', request.args.enabled ? '1' : '0') ||
+					!conf.commit('AdGuardHome'))
+					return { saved: false, applied: false };
+				conf.unload('AdGuardHome');
+				return {
+					saved: true,
+					applied: system(['/etc/init.d/AdGuardHome', 'reload'], 30000) == 0
+				};
+			}
+		},
 		getRuntimeLog: {
 			args: { offset: 0, identity: '' },
 			call: function(request) {

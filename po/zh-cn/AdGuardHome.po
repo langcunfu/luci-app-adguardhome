@@ -17,47 +17,35 @@ msgstr "启用"
 msgid "Browser management port"
 msgstr "网页管理端口"
 
-msgid "Redirect mode"
-msgstr "重定向模式"
+msgid "DNS handling mode"
+msgstr "DNS 接入方式"
 
-msgid "AdGuardHome redirect mode"
-msgstr "AdGuardHome 重定向模式"
-
-msgid "None"
-msgstr "无"
+msgid "Do not handle DNS"
+msgstr "不接管 DNS"
 
 msgid "Run as dnsmasq upstream server"
 msgstr "作为 dnsmasq 的上游服务器"
 
-msgid "Redirect port 53 to AdGuardHome"
-msgstr "将 53 端口重定向到 AdGuardHome"
+msgid "Forward port 53 requests through the firewall"
+msgstr "通过防火墙转发 53 端口请求"
 
 msgid "Use port 53 instead of dnsmasq"
 msgstr "使用 53 端口替代 dnsmasq"
 
-msgid "WAN Interface"
-msgstr "WAN 接口"
+msgid "Interfaces excluded from forwarding"
+msgstr "不参与转发的接口"
 
-msgid "Only effective in redirect mode, bypass specified interfaces to avoid becoming a public DNS resolver"
-msgstr "仅在重定向模式下生效，绕过指定接口以避免成为公共 DNS 解析器"
+msgid "DNS requests arriving on these interfaces are not forwarded to AdGuardHome"
+msgstr "从这些接口进入的 DNS 请求不转发到 AdGuardHome"
 
 msgid "Bin Path"
 msgstr "执行文件路径"
 
-msgid "AdGuardHome binary path"
-msgstr "AdGuardHome 执行文件路径"
-
 msgid "Config Path"
 msgstr "配置文件路径"
 
-msgid "AdGuardHome config path"
-msgstr "AdGuardHome 配置文件路径"
-
 msgid "Work dir"
 msgstr "工作目录"
-
-msgid "AdGuardHome work dir including rules, audit log and database"
-msgstr "AdGuardHome 工作目录，包含规则、审计日志和数据库"
 
 msgid "Runtime log file"
 msgstr "运行日志文件"
@@ -226,3 +214,18 @@ msgstr "已停用"
 
 msgid "Unable to read switch status"
 msgstr "无法读取切换状态"
+
+msgid "Forward port 53 requests through the firewall (recommended)"
+msgstr "通过防火墙转发 53 端口请求（推荐）"
+
+msgid "Log settings"
+msgstr "日志设置"
+
+msgid "Applying verbose logging…"
+msgstr "正在应用详细日志设置…"
+
+msgid "Saved, but service reload failed; check the log"
+msgstr "已保存，但服务重载失败，请检查日志"
+
+msgid "Unable to apply verbose logging"
+msgstr "无法应用详细日志设置"

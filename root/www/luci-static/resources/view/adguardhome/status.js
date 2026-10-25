@@ -27,9 +27,9 @@ var callRedirectStatus = rpc.declare({
 
 function modeLabel(mode) {
 	return {
-		none: _('None'),
+		none: _('Do not handle DNS'),
 		'dnsmasq-upstream': _('Run as dnsmasq upstream server'),
-		redirect: _('Redirect port 53 to AdGuardHome'),
+		redirect: _('Forward port 53 requests through the firewall'),
 		exchange: _('Use port 53 instead of dnsmasq')
 	}[mode] || _('Status unavailable');
 }
