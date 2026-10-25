@@ -105,10 +105,11 @@ return view.extend({
 				timeToggle, _('localtime')
 			]);
 			var verboseToggle = E('input', {
-				'type': 'checkbox', 'style': toggleStyle,
-				'checked': m.data.get('AdGuardHome', 'AdGuardHome', 'verbose') === '1',
-				'disabled': m.readonly
+				'type': 'checkbox', 'style': toggleStyle
 			});
+			// Boolean HTML attributes are true whenever present, even with a false value.
+			verboseToggle.checked = m.data.get('AdGuardHome', 'AdGuardHome', 'verbose') === '1';
+			verboseToggle.disabled = !!m.readonly;
 			var verboseMessage = E('span', { 'role': 'status' }, '');
 			var verboseLabel = E('label', { 'style': 'display:inline-flex;align-items:center;' }, [
 				verboseToggle, _('Verbose log')
