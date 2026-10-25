@@ -1,11 +1,20 @@
 #!/usr/bin/ucode
 'use strict';
 
-import { stat, popen, readfile, writefile, unlink, lsdir } from 'fs';
+import { stat, open, popen, readfile, writefile, unlink, lsdir } from 'fs';
 import { cursor } from 'uci';
 
 function shellQuote(value) {
 	return "'" + replace(value, /'/g, "'\\''") + "'";
+}
+
+function coreUpdateRunning() {
+	// The kernel releases the lock even if the updater is killed.
+	const result = system(['/usr/bin/flock', '-n', '-E', '2',
+		'/var/lock/AdGuardHome-update.lock', '/bin/true'], 3000);
+	if (result != 0 && result != 2)
+		die('Unable to check core update lock');
+	return result == 2;
 }
 
 return {
@@ -98,8 +107,9 @@ return {
 		},
 		getCoreUpdate: {
 			call: function() {
-				const running = stat('/var/run/update_core') != null;
-				const failed = stat('/var/run/update_core_error') != null;
+				const running = coreUpdateRunning();
+				const failed = stat('/var/run/update_core_error') != null ||
+					(!running && stat('/var/run/update_core') != null);
 				const log = readfile('/tmp/AdGuardHome_update.log', 131072) || '';
 
 				return {
@@ -111,15 +121,12 @@ return {
 		startCoreUpdate: {
 			args: { force: false },
 			call: function(request) {
-				if (stat('/var/run/update_core') != null)
+				if (coreUpdateRunning())
 					return { started: false, reason: 'busy' };
 
-				unlink('/var/run/update_core_error');
-				unlink('/tmp/AdGuardHome_update.log');
-
 				const command = request.args.force
-					? '/bin/sh /usr/share/AdGuardHome/update_core.sh force >/tmp/AdGuardHome_update.log 2>&1 </dev/null &'
-					: '/bin/sh /usr/share/AdGuardHome/update_core.sh >/tmp/AdGuardHome_update.log 2>&1 </dev/null &';
+					? '/bin/sh /usr/share/AdGuardHome/update_core.sh force >/dev/null 2>&1 </dev/null &'
+					: '/bin/sh /usr/share/AdGuardHome/update_core.sh >/dev/null 2>&1 </dev/null &';
 
 				return { started: system(['/bin/sh', '-c', command], 3000) == 0 };
 			}
@@ -151,7 +158,7 @@ return {
 			}
 		},
 		getRuntimeLog: {
-			args: { offset: 0 },
+			args: { offset: 0, identity: '' },
 			call: function(request) {
 				const conf = cursor();
 				const logfile = conf.get('AdGuardHome', 'AdGuardHome', 'logfile') || '';
@@ -167,18 +174,40 @@ return {
 						system(['/bin/sh', '-c', '/bin/sh /usr/share/AdGuardHome/getsyslog.sh >/dev/null 2>&1 &'], 3000);
 				}
 
-				const log = readfile(source) || '';
-				const size = length(log);
-				let offset = +request.args.offset || 0;
-				if (offset < 0 || offset > size)
+				// Bound memory and start with the most recent 256 KiB on a new view.
+				const limit = 262144;
+				const info = stat(source);
+				const identity = info ? source + ':' + info.dev.major + ':' + info.dev.minor + ':' + info.inode : '';
+				let offset = int(request.args.offset) || 0;
+				let reset = request.args.identity != identity || offset < 0 || offset > (info?.size || 0);
+				if (reset)
 					offset = 0;
-				const content = substr(log, offset, 2097152);
+				if (info && info.size - offset > limit) {
+					offset = info.size - limit;
+					reset = true;
+				}
+
+				let content = '';
+				if (info?.type == 'file') {
+					const file = open(source, 'r');
+					if (!file)
+						die('Unable to open runtime log');
+					const positioned = file.seek(offset);
+					const chunk = positioned ? file.read(limit) : null;
+					file.close();
+					if (chunk == null)
+						die('Unable to read runtime log');
+					content = chunk;
+				}
 
 				return {
 					enabled: true,
 					localtime: logfile != 'syslog',
-					content: content,
-					offset: offset + length(content)
+					// ubus strings stop at NUL; cleared files can contain sparse zero-filled gaps.
+					content_b64: b64enc(content),
+					offset: offset + length(content),
+					identity: identity,
+					reset: reset
 				};
 			}
 		},

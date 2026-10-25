@@ -7,7 +7,7 @@
 var callRuntimeLog = rpc.declare({
 	object: 'luci.adguardhome',
 	method: 'getRuntimeLog',
-	params: [ 'offset' ],
+	params: [ 'offset', 'identity' ],
 	expect: { '': {} },
 	reject: true
 });
@@ -18,6 +18,19 @@ var callClearRuntimeLog = rpc.declare({
 	expect: { '': {} },
 	reject: true
 });
+
+function decodeLog(result) {
+	var content = result.content || '';
+	if (typeof result.content_b64 === 'string') {
+		var binary = atob(result.content_b64);
+		var bytes = new Uint8Array(binary.length);
+		for (var i = 0; i < binary.length; i++)
+			bytes[i] = binary.charCodeAt(i);
+		content = new TextDecoder('utf-8').decode(bytes);
+	}
+	// Truncating an open log does not reset a non-append writer's file position.
+	return content.replace(/\0/g, '');
+}
 
 function pad(value) {
 	return value < 10 ? '0' + value : value;
@@ -40,14 +53,17 @@ return view.extend({
 	handleReset: null,
 
 	load: function() {
-		return callRuntimeLog(0).catch(function() {
-			return { enabled: false, localtime: false, content: '', offset: 0 };
+		return callRuntimeLog(0, '').catch(function() {
+			return { error: true, localtime: false, content: '', offset: 0 };
 		});
 	},
 
 	render: function(initialLog) {
 		var sharedStatus = status.render();
-		var content = initialLog.content || '';
+		var logLimit = 262144;
+		var content = decodeLog(initialLog).slice(-logLimit);
+		var identity = initialLog.identity || '';
+		var generation = 0;
 		var offset = initialLog.offset || 0;
 		var enabled = initialLog.enabled;
 		var localtime = initialLog.localtime;
@@ -101,11 +117,14 @@ return view.extend({
 		});
 		clearButton.addEventListener('click', function() {
 			clearButton.disabled = true;
+			generation++;
 			callClearRuntimeLog().then(function(result) {
 				if (!result.cleared)
 					throw new Error(result.reason || 'clear failed');
 				content = '';
 				offset = 0;
+				identity = '';
+				generation++;
 				message.textContent = '';
 				renderLog();
 			}).catch(function() {
@@ -125,25 +144,31 @@ return view.extend({
 			E('div', { 'style': 'padding:0 0.6em 0.6em;' }, [clearButton, downloadButton, message])
 		]);
 
-		if (!enabled)
+		if (initialLog.error)
+			message.textContent = _('Unable to read runtime log');
+		else if (!enabled)
 			message.textContent = _('Please add log path in config to enable log');
 		renderLog();
 
 		poll.add(function() {
-			return callRuntimeLog(offset).then(function(result) {
+			if (clearButton.disabled)
+				return Promise.resolve();
+			var requestGeneration = generation;
+			return callRuntimeLog(offset, identity).then(function(result) {
+				if (requestGeneration !== generation)
+					return;
 				enabled = result.enabled;
 				if (!enabled) {
 					message.textContent = _('Please add log path in config to enable log');
 					return;
 				}
 				message.textContent = '';
-				if (result.offset < offset)
+				if (result.reset || result.offset < offset)
 					content = '';
 				offset = result.offset;
-				if (result.content) {
-					content += result.content;
-					renderLog();
-				}
+				identity = result.identity || '';
+				content = (content + decodeLog(result)).slice(-logLimit);
+				renderLog();
 			}).catch(function() {
 				message.textContent = _('Status unavailable');
 			});

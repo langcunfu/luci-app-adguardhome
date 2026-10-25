@@ -56,43 +56,159 @@ clear_nft_redirect() {
     nft delete table inet "$NFT_TABLE" 2>/dev/null
 }
 
-set_forward_dnsmasq() {
-    local PORT="$1"
-    addr="127.0.0.1#$PORT"
-    OLD_SERVER="$(uci get dhcp.@dnsmasq[0].server 2>/dev/null)"
-    echo "$OLD_SERVER" | grep -q "^$addr" && return 0
-
-    uci delete dhcp.@dnsmasq[0].server 2>/dev/null
-    uci add_list dhcp.@dnsmasq[0].server="$addr"
-    for server in $OLD_SERVER; do
-        [ "$server" = "$addr" ] && continue
-        uci add_list dhcp.@dnsmasq[0].server="$server"
+wait_for_pid_exit() {
+    local pid="$1" attempts=0
+    case "$pid" in ''|*[!0-9]*) return 0 ;; esac
+    while kill -0 "$pid" 2>/dev/null; do
+        [ "$attempts" -lt 15 ] || return 1
+        sleep 1
+        attempts=$((attempts + 1))
     done
-    uci delete dhcp.@dnsmasq[0].resolvfile 2>/dev/null
-    uci set dhcp.@dnsmasq[0].noresolv=1
-    uci commit dhcp
-    /etc/init.d/dnsmasq restart >/dev/null 2>&1
 }
 
-stop_forward_dnsmasq() {
-    local OLD_PORT="$1"
-    addr="127.0.0.1#$OLD_PORT"
-    OLD_SERVER="$(uci get dhcp.@dnsmasq[0].server 2>/dev/null)"
-    echo "$OLD_SERVER" | grep -q "^$addr" || return 0
+restart_dnsmasq() {
+    local service pids pid
+    service="$(ubus call service list '{"name":"dnsmasq"}' 2>/dev/null)" || return 1
+    pids="$(printf '%s' "$service" | jsonfilter -e '@.dnsmasq.instances.*.pid')"
+    /etc/init.d/dnsmasq restart 8>&- || return 1
+    # procd restart is asynchronous: wait until the old listeners release their ports.
+    for pid in $pids; do
+        if ! wait_for_pid_exit "$pid"; then
+            logger -t AdGuardHome 'dnsmasq did not release its old DNS port.'
+            return 1
+        fi
+    done
+}
 
-    uci del_list dhcp.@dnsmasq[0].server="$addr" 2>/dev/null
-    addrlist="$(uci get dhcp.@dnsmasq[0].server 2>/dev/null)"
-    if [ -z "$addrlist" ]; then
-        resolvfile="/tmp/resolv.conf.d/resolv.conf.auto"
-        [ ! -f "$resolvfile" ] && resolvfile="/tmp/resolv.conf.auto"
-        uci set dhcp.@dnsmasq[0].resolvfile="$resolvfile" 2>/dev/null
-        uci delete dhcp.@dnsmasq[0].noresolv 2>/dev/null
+# Keep the snapshot in persistent UCI config so a reboot does not lose it.
+save_dnsmasq_upstream_config() {
+    local backup="AdGuardHome.dnsmasq_backup" option value server
+    [ "$(uci -q get "$backup.ready")" = "1" ] && return 0
+
+    uci -q delete "$backup"
+    uci set "$backup=dnsmasq_backup" || return 1
+    value="$(uci -q get dhcp.@dnsmasq[0].server)"
+    for server in $value; do
+        uci add_list "$backup.server=$server" || return 1
+    done
+    for option in resolvfile noresolv; do
+        if value="$(uci -q get "dhcp.@dnsmasq[0].$option")"; then
+            uci set "$backup.$option=$value" || return 1
+        fi
+    done
+    uci set "$backup.ready=1" || return 1
+    if ! uci commit AdGuardHome; then
+        uci -q revert "$backup"
+        return 1
     fi
-    uci commit dhcp
-    /etc/init.d/dnsmasq restart >/dev/null 2>&1
+}
+
+# A catch-all /#/ upstream would still bypass AdGuardHome. Keep only scoped rules.
+is_scoped_dnsmasq_server() {
+    local domains="${1%/*}"
+    case "$1" in
+        /*) case "$domains/" in */\#/*) return 1 ;; esac; return 0 ;;
+    esac
+    return 1
+}
+
+set_forward_dnsmasq() (
+    # Disable pathname expansion for dnsmasq domain patterns containing '*'.
+    set -f
+    local addr="127.0.0.1#$1" servers desired server
+
+    # Upgrade from versions which changed DNS without saving a snapshot.
+    if [ "$(uci -q get AdGuardHome.dnsmasq_backup.ready)" != "1" ] &&
+       [ "$2" = "dnsmasq-upstream" ] && [ "$3" = "1" ]; then
+        stop_forward_dnsmasq "$4" || return 1
+    fi
+    save_dnsmasq_upstream_config || return 1
+
+    servers="$(uci -q get dhcp.@dnsmasq[0].server)"
+    desired="$addr"
+    for server in $servers; do
+        is_scoped_dnsmasq_server "$server" && desired="$desired $server"
+    done
+    if [ "$servers" = "$desired" ] && [ "$(uci -q get dhcp.@dnsmasq[0].noresolv)" = "1" ]; then
+        return 0
+    fi
+
+    uci -q delete dhcp.@dnsmasq[0].server
+    for server in $desired; do
+        uci add_list "dhcp.@dnsmasq[0].server=$server" || return 1
+    done
+    # noresolv disables resolvfile; leave its original path intact.
+    uci set dhcp.@dnsmasq[0].noresolv=1 || return 1
+    uci commit dhcp || return 1
+    restart_dnsmasq >/dev/null 2>&1
+)
+
+stop_forward_dnsmasq() (
+    set -f
+    local backup="AdGuardHome.dnsmasq_backup" option value server
+    local addr="127.0.0.1#$1" found=0 has_general=0
+
+    if [ "$(uci -q get "$backup.ready")" = "1" ]; then
+        uci -q delete dhcp.@dnsmasq[0].server
+        value="$(uci -q get "$backup.server")"
+        for server in $value; do
+            uci add_list "dhcp.@dnsmasq[0].server=$server" || return 1
+        done
+        for option in resolvfile noresolv; do
+            if value="$(uci -q get "$backup.$option")"; then
+                uci set "dhcp.@dnsmasq[0].$option=$value" || return 1
+            else
+                uci -q delete "dhcp.@dnsmasq[0].$option"
+            fi
+        done
+        uci commit dhcp || return 1
+        restart_dnsmasq >/dev/null 2>&1 || return 1
+        uci -q delete "$backup"
+        uci commit AdGuardHome
+        return $?
+    fi
+
+    # Legacy installs have no snapshot: remove only the exact old endpoint.
+    value="$(uci -q get dhcp.@dnsmasq[0].server)"
+    for server in $value; do
+        if [ "$server" = "$addr" ]; then
+            found=1
+        elif ! is_scoped_dnsmasq_server "$server"; then
+            has_general=1
+        fi
+    done
+    [ "$found" = "1" ] || return 0
+    uci -q del_list "dhcp.@dnsmasq[0].server=$addr" || return 1
+    if [ "$has_general" = "0" ]; then
+        if ! uci -q get dhcp.@dnsmasq[0].resolvfile >/dev/null; then
+            value="/tmp/resolv.conf.d/resolv.conf.auto"
+            [ -f "$value" ] || value="/tmp/resolv.conf.auto"
+            uci set "dhcp.@dnsmasq[0].resolvfile=$value" || return 1
+        fi
+        uci -q delete dhcp.@dnsmasq[0].noresolv
+    fi
+    logger -t AdGuardHome 'No DNS snapshot from previous version; removed old upstream, original resolver settings are unavailable.'
+    uci commit dhcp || return 1
+    restart_dnsmasq >/dev/null 2>&1
+)
+
+# Delete only the core instance: do not run stop_service() and undo DNS settings.
+# Waiting matters because the old process still owns its DNS port during shutdown.
+stop_core() {
+    local service instance pid
+    service="$(ubus call service list '{"name":"AdGuardHome"}' 2>/dev/null)" || return 1
+    instance="$(printf '%s' "$service" | jsonfilter -e '@.AdGuardHome.instances.instance1')"
+    [ -n "$instance" ] || return 0
+    pid="$(printf '%s' "$instance" | jsonfilter -e '@.pid')"
+    ubus call service delete '{"name":"AdGuardHome","instance":"instance1"}' >/dev/null || return 1
+    if ! wait_for_pid_exit "$pid"; then
+        logger -t AdGuardHome 'Core did not stop; DNS port settings were not changed.'
+        return 1
+    fi
 }
 
 agh_reload() {
+    [ "${AGH_REDIRECT_RELOAD:-1}" = "1" ] || return 0
     ubus call service event '{"type":"config.change","data":{"package":"AdGuardHome"}}' >/dev/null 2>&1
 }
 
@@ -100,7 +216,7 @@ rm_port53() {
     local configpath
     config_get configpath $CONFIGURATION configpath "/etc/AdGuardHome.yaml"
 
-    local AdGuardHome_PORT dnsmasq_port binpath
+    local AdGuardHome_PORT dnsmasq_port
     AdGuardHome_PORT=$(config_editor "dns.port" "" "$configpath" "1")
     dnsmasq_port=$(uci get dhcp.@dnsmasq[0].port 2>/dev/null)
     [ -z "$dnsmasq_port" ] && dnsmasq_port="53"
@@ -111,13 +227,12 @@ rm_port53() {
         return
     fi
 
+    stop_core || return 1
     config_editor "dns.port" "$dnsmasq_port" "$configpath"
-    uci set dhcp.@dnsmasq[0].port="53"
-    uci commit dhcp
-
-    config_get binpath $CONFIGURATION binpath "/usr/bin/AdGuardHome/AdGuardHome"
-    killall -9 "$binpath" 2>/dev/null
-    /etc/init.d/dnsmasq restart
+    [ "$(config_editor "dns.port" "" "$configpath" "1")" = "$dnsmasq_port" ] || return 1
+    uci set dhcp.@dnsmasq[0].port="53" || return 1
+    uci commit dhcp || return 1
+    restart_dnsmasq || return 1
     agh_reload
 }
 
@@ -136,10 +251,12 @@ use_port53() {
         return
     fi
 
+    stop_core || return 1
     config_editor "dns.port" "53" "$configpath"
-    uci set dhcp.@dnsmasq[0].port="$AdGuardHome_PORT"
-    uci commit dhcp
-    /etc/init.d/dnsmasq restart
+    [ "$(config_editor "dns.port" "" "$configpath" "1")" = "53" ] || return 1
+    uci set dhcp.@dnsmasq[0].port="$AdGuardHome_PORT" || return 1
+    uci commit dhcp || return 1
+    restart_dnsmasq || return 1
     agh_reload
 }
 
@@ -175,12 +292,17 @@ mark_redirect_flag() {
     echo -n "$flag" > /var/run/AdGredir
 }
 
-_do_redirect() {
+_do_redirect() (
+    # Delayed startup and stop/reload may overlap; serialize snapshot changes.
+    exec 8>/var/lock/AdGuardHome-redirect.lock || return 1
+    flock -w 10 8 || return 1
     local section="$CONFIGURATION"
     args=""
     ipv6_server=1
     tcp_server=0
     enabled="$1"
+    # start_service already starts the prepared core; stopping must not queue a reload.
+    AGH_REDIRECT_RELOAD="${2:-$enabled}"
 
     config_get configpath $CONFIGURATION configpath "/etc/AdGuardHome.yaml"
     AdGuardHome_PORT="$(config_editor "dns.port" "" "$configpath" "1")"
@@ -203,9 +325,19 @@ _do_redirect() {
             if [ "$old_redirect" = "redirect" ] && [ "$old_port" != "0" ]; then
                 clear_nft_redirect
             elif [ "$old_redirect" = "dnsmasq-upstream" ]; then
-                stop_forward_dnsmasq "$old_port"
+                if [ "$old_enabled" = "1" ] || [ "$(uci -q get AdGuardHome.dnsmasq_backup.ready)" = "1" ]; then
+                    if ! stop_forward_dnsmasq "$old_port"; then
+                        echo -n "0" > /var/run/AdGredir
+                        return 1
+                    fi
+                fi
+                # Restoration already handled any legacy endpoint. Do not remove it twice.
+                old_enabled=0
             elif [ "$old_redirect" = "exchange" ]; then
-                rm_port53
+                if ! rm_port53; then
+                    echo -n "0" > /var/run/AdGredir
+                    return 1
+                fi
             fi
         fi
     elif [ "$old_enabled" = "1" ] && [ "$enabled" = "1" ]; then
@@ -230,13 +362,19 @@ _do_redirect() {
     if [ "$redirect" = "redirect" ]; then
         set_nft_redirect "$AdGuardHome_PORT"
     elif [ "$redirect" = "dnsmasq-upstream" ]; then
-        set_forward_dnsmasq "$AdGuardHome_PORT"
+        if ! set_forward_dnsmasq "$AdGuardHome_PORT" "$old_redirect" "$old_enabled" "$old_port"; then
+            echo -n "0" > /var/run/AdGredir
+            return 1
+        fi
     elif [ "$redirect" = "exchange" ] && [ "$(uci get dhcp.@dnsmasq[0].port 2>/dev/null)" = "53" ]; then
-        use_port53
+        if ! use_port53; then
+            echo -n "0" > /var/run/AdGredir
+            return 1
+        fi
     fi
 
     mark_redirect_flag "$enabled" "$redirect" "$AdGuardHome_PORT"
-}
+)
 
 do_redirect() {
     config_load "${CONFIGURATION}"
@@ -326,6 +464,7 @@ boot_service() {
 }
 
 start_service() {
+    stop_core || return 1
     rm -f /var/run/AdGserverdis 2>/dev/null
     config_load "${CONFIGURATION}"
     config_get hashpass $CONFIGURATION hashpass ""
@@ -379,13 +518,28 @@ start_service() {
 
     if [ ! -f "$binpath" ]; then
         _do_redirect 0
-        /usr/share/AdGuardHome/update_core.sh 2>&1 >/tmp/AdGuardHome_update.log &
+        /usr/share/AdGuardHome/update_core.sh >/dev/null 2>&1 &
         exit 0
     fi
 
     config_get_bool verbose $CONFIGURATION verbose 0
     if [ "$verbose" -eq 1 ]; then
         ADDITIONAL_ARGS="$ADDITIONAL_ARGS -v"
+    fi
+
+    if [ "$(uci -q get bypass.@global[0].global_server)" ] && [ "$(uci -q get bypass.@global[0].adguardhome)" = "1" ] && [ "$(uci -q get dhcp.@dnsmasq[0].port)" = "53" ]; then
+        uci -q set AdGuardHome.AdGuardHome.redirect='exchange'
+        uci -q commit AdGuardHome
+        config_load "${CONFIGURATION}"
+    fi
+
+    # Prepare both DNS ports before procd can launch the new core.
+    if [ -f "$configpath" ]; then
+        if ! _do_redirect 1 0; then
+            [ "$(config_editor "dns.port" "" "$configpath" "1")" = "0" ] || return 1
+        fi
+    else
+        _do_redirect 0 0
     fi
 
     procd_open_instance
@@ -399,10 +553,7 @@ start_service() {
     procd_set_param command "$binpath" $ADDITIONAL_ARGS
     procd_set_param file "$configpath" "/etc/hosts" "/etc/config/AdGuardHome"
     procd_close_instance
-    if [ -f "$configpath" ]; then
-        (sleep 5 && _do_redirect 1) &
-    else
-        _do_redirect 0
+    if [ ! -f "$configpath" ]; then
         config_get "redirect" "AdGuardHome" "redirect" "none"
         if [ "$redirect" != "none" ]; then
             procd_open_instance "waitconfig"
@@ -413,12 +564,7 @@ start_service() {
     fi
     echo "AdGuardHome service enabled"
     echo "luci enable switch=$enabled"
-    (sleep 10 && [ -z "$(pgrep "$(basename "$binpath")")" ] && logger "AdGuardHome" "no process in 10s cancel redirect" && _do_redirect 0 )&
-    if [ "$(uci -q get bypass.@global[0].global_server)" ] && [ "$(uci -q get bypass.@global[0].adguardhome)" = "1" ] && [ "$(uci -q get dhcp.@dnsmasq[0].port)" = "53" ]; then
-        uci -q set AdGuardHome.AdGuardHome.redirect='exchange'
-        uci -q commit AdGuardHome
-        do_redirect
-    fi
+
 }
 
 reload_service() {
@@ -428,6 +574,7 @@ reload_service() {
 }
 
 stop_service() {
+    stop_core || return 1
     config_load "${CONFIGURATION}"
     _do_redirect 0
     echo "AdGuardHome service disabled"

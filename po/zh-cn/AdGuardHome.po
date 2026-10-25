@@ -208,3 +208,6 @@ msgstr "恢复失败，备份文件位于"
 
 msgid "Config changed on disk; reload before saving."
 msgstr "磁盘上的配置已变化，请重新读取后再保存。"
+
+msgid "Unable to read runtime log"
+msgstr "无法读取运行日志"

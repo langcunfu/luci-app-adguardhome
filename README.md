@@ -32,6 +32,14 @@
 - `eth0`
 - `pppoe-wan`
 
+### dnsmasq 上游模式
+
+启用后，普通 DNS 查询仅转发给 AdGuardHome；按域名指定的上游规则继续保留，`/#/` 通配上游暂时移除。
+
+启用前会持久保存原来的 `server`、`resolvfile` 和 `noresolv` 设置，停用或切换模式时恢复。启用期间对这些设置的手动修改会在恢复时被原备份覆盖。
+
+从旧版升级时，如果旧版已删除自定义解析设置且没有备份，无法还原丢失的原值；兼容清理会移除旧 AdGuardHome 端点，并在没有普通上游时恢复系统 DNS。
+
 ## 界面
 
 <img width="677" height="695" src="https://github.com/user-attachments/assets/4b436eec-8e05-4bf6-82d9-a972164e9659" />

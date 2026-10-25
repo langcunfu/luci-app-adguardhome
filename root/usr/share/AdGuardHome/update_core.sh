@@ -2,6 +2,28 @@
 
 PATH="/usr/sbin:/usr/bin:/sbin:/bin"
 update_mode=$1
+
+# Keep the lock file: unlinking it would allow a second lock on a new inode.
+exec 9>/var/lock/AdGuardHome-update.lock || exit 1
+# Allow a brief status probe to finish before treating the lock as busy.
+if ! flock -w 1 9; then
+	printf '%s\n' '已经有更新任务正在运行，请等待其结束。'
+	exit 2
+fi
+
+# Only the lock owner may reset the log and update status.
+exec >/tmp/AdGuardHome_update.log 2>&1
+cleanup() {
+	local result=$?
+	trap - EXIT
+	[ "$result" -ne 0 ] && touch /var/run/update_core_error
+	rm -f /var/run/update_core
+	exit "$result"
+}
+trap cleanup EXIT
+trap 'exit 1' TERM INT HUP
+rm -f /var/run/update_core_error
+touch /var/run/update_core
 binpath=$(uci get AdGuardHome.AdGuardHome.binpath 2>/dev/null)
 if [ -z "$binpath" ]; then
 	uci set AdGuardHome.AdGuardHome.binpath="/tmp/AdGuardHome/AdGuardHome"
@@ -11,31 +33,9 @@ fi
 enabled=$(uci get AdGuardHome.AdGuardHome.enabled 2>/dev/null)
 core_api_url="https://api.github.com/repos/AdguardTeam/AdGuardHome/releases/latest"
 
-Check_Task(){
-	running_tasks=$(pgrep -f "update_core.sh" 2>/dev/null | grep -v "^$$\$" | wc -l)
-	running_tasks=${running_tasks:-0}
-	
-	case $1 in
-	force)
-		printf "%s\n" "执行: 强制更新核心"
-		if [ "$running_tasks" -gt 0 ]; then
-			printf "%s\n" "清除 ${running_tasks} 个进程 ..."
-			pkill -9 -f "update_core.sh" 2>/dev/null
-			sleep 1
-		fi
-	;;
-	*)
-		if [ "$running_tasks" -gt 1 ]; then
-			printf "%s\n" "已经有更新任务正在运行, 请等待其执行结束或点击强制更新!"
-			EXIT 2
-		fi
-	;;
-	esac
-}
-
 Check_Updates(){
 	downloader_cmd="uclient-fetch"
-	downloader_opts="--no-check-certificate -T 5 -q -O"
+	downloader_opts="-T 5 -q -O"
 	downloader_quiet_opts="-q -O -"
 	printf "%s\n" "开始检查更新, 请耐心等待 ..."
 	Cloud_Version="$(${downloader_cmd} ${downloader_quiet_opts} "$core_api_url" 2>/dev/null | sed -n 's/.*"tag_name":[ ]*"\(v[^"]*\)".*/\1/p' | head -n 1)"
@@ -67,7 +67,7 @@ Update_Core(){
 	printf "\n开始下载 AdGuardHome 核心文件 ...\n\n"
 	${downloader_cmd} ${downloader_opts} "/tmp/AdGuardHome_Update/${link##*/}" "$link" > /dev/null 2>&1
 	if [ $? -ne 0 ]; then
-		printf "\nAdGuardHome 核心下载失败 ...\n"
+		printf "\nAdGuardHome 核心下载失败，请检查网络、系统时间及 CA 证书 ...\n"
 		rm -rf /tmp/AdGuardHome_Update
 		EXIT 1
 	fi 
@@ -87,10 +87,9 @@ Update_Core(){
 	chmod +x "$downloadbin"
 	size_bytes=$(wc -c < "$downloadbin" 2>/dev/null || echo 0)
 	printf "\nAdGuardHome 核心体积: %s\n" "$(awk -v bytes="$size_bytes" 'BEGIN{printf "%.2fMB", bytes/1000000}')"
-	/etc/init.d/AdGuardHome stop > /dev/null 2>&1
+	/etc/init.d/AdGuardHome stop 9>&- > /dev/null 2>&1
 	printf "\n移动 AdGuardHome 核心文件到 %s ...\n" "${binpath%/*}"
-	mv -f "$downloadbin" "$binpath" > /dev/null 2>&1
-	if [ ! -s "$binpath" ] && [ $? -ne 0 ]; then
+	if ! mv -f "$downloadbin" "$binpath" > /dev/null 2>&1 || [ ! -s "$binpath" ]; then
 		printf "AdGuardHome 核心移动失败!\n可能是设备空间不足导致, 请尝试更改 [执行文件路径] 为 /tmp/AdGuardHome\n"
 		EXIT 1
 	fi
@@ -98,7 +97,7 @@ Update_Core(){
 	chmod +x "$binpath"
 	if [ "$enabled" = 1 ]; then
 		printf "\n正在重启 AdGuardHome 服务...\n"
-		/etc/init.d/AdGuardHome restart > /dev/null 2>&1
+		/etc/init.d/AdGuardHome restart 9>&- > /dev/null 2>&1
 	fi
 	printf "\nAdGuardHome 核心更新成功!\n"
 }
@@ -159,18 +158,7 @@ GET_Arch() {
 }
 
 EXIT(){
-	rm -rf /var/run/update_core $LOCKU 2>/dev/null
-	[ "$1" -ne 0 ] && touch /var/run/update_core_error
-	exit $1
+	exit "$1"
 }
 
-main(){
-	Check_Task "$update_mode"
-	Check_Updates "$update_mode"
-}
-
-trap "EXIT 1" SIGTERM SIGINT
-touch /var/run/update_core
-rm -rf /var/run/update_core_error 2>/dev/null
-
-main
+Check_Updates "$update_mode"
