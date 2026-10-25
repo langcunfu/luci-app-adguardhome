@@ -19,6 +19,30 @@ function coreUpdateRunning() {
 
 return {
 	'luci.adguardhome': {
+		getRedirectStatus: {
+			call: function() {
+				const conf = cursor();
+				function option(name, fallback) {
+					const value = conf.get('AdGuardHome', 'AdGuardHome', name);
+					return (type(value) == 'array' ? value[0] : value) || fallback;
+				}
+				const result = {
+					mode: option('redirect', 'none'),
+					enabled: option('enabled', '0') == '1',
+					applied_mode: option('old_redirect', 'none'),
+					applied_enabled: option('old_enabled', '0') == '1',
+					binpath: option('binpath', '/usr/bin/AdGuardHome/AdGuardHome'),
+					redirected: trim(readfile('/var/run/AdGredir') || '') == '1'
+				};
+				conf.unload('AdGuardHome');
+				const lock = system(['/usr/bin/flock', '-n', '-E', '2',
+					'/var/lock/AdGuardHome-redirect.lock', '/bin/true'], 3000);
+				if (lock != 0 && lock != 2)
+					die('Unable to check redirect status');
+				result.busy = lock == 2;
+				return result;
+			}
+		},
 		getManualConfig: {
 			call: function() {
 				const conf = cursor();

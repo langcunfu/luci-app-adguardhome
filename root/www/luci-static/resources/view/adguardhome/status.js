@@ -2,8 +2,6 @@
 'require baseclass';
 'require poll';
 'require rpc';
-'require fs';
-'require uci';
 
 var callCoreInfo = rpc.declare({
 	object: 'luci.adguardhome',
@@ -20,15 +18,20 @@ var callServiceList = rpc.declare({
 	reject: true
 });
 
-var loadConfigPromise;
+var callRedirectStatus = rpc.declare({
+	object: 'luci.adguardhome',
+	method: 'getRedirectStatus',
+	expect: { '': {} },
+	reject: true
+});
 
-function getConfiguredBinPath() {
-	if (!loadConfigPromise)
-		loadConfigPromise = uci.load('AdGuardHome').catch(function() { return null; });
-
-	return loadConfigPromise.then(function() {
-		return uci.get('AdGuardHome', 'AdGuardHome', 'binpath') || '/usr/bin/AdGuardHome/AdGuardHome';
-	});
+function modeLabel(mode) {
+	return {
+		none: _('None'),
+		'dnsmasq-upstream': _('Run as dnsmasq upstream server'),
+		redirect: _('Redirect port 53 to AdGuardHome'),
+		exchange: _('Use port 53 instead of dnsmasq')
+	}[mode] || _('Status unavailable');
 }
 
 function coreIsRunning(services, binpath) {
@@ -57,9 +60,9 @@ return baseclass.extend({
 
 		function setBadge(badge, label, state) {
 			badge.textContent = label;
-			badge.style.backgroundColor = state === true ? '#dcfce7' : state === false ? '#fee2e2' : '#e5e7eb';
-			badge.style.color = state === true ? '#14532d' : state === false ? '#7f1d1d' : '#374151';
-			badge.style.borderColor = state === true ? '#86efac' : state === false ? '#fca5a5' : '#d1d5db';
+			badge.style.backgroundColor = state === 'pending' ? '#fef3c7' : state === true ? '#dcfce7' : state === false ? '#fee2e2' : '#e5e7eb';
+			badge.style.color = state === 'pending' ? '#92400e' : state === true ? '#14532d' : state === false ? '#7f1d1d' : '#374151';
+			badge.style.borderColor = state === 'pending' ? '#fcd34d' : state === true ? '#86efac' : state === false ? '#fca5a5' : '#d1d5db';
 		}
 
 		function refreshCore() {
@@ -77,25 +80,125 @@ return baseclass.extend({
 			});
 		}
 
-		refreshCore();
-		poll.add(function() {
-			var redirectFlag = fs.read('/var/run/AdGredir').catch(function(error) {
-				if (error.name === 'NotFoundError')
-					return '';
-				throw error;
-			});
+		var storageKey = 'adguardhome.pendingSwitch';
+		var pending = null;
+		var generation = 0;
+		var stable = 0;
+		var nextRefresh = 0;
+		var inFlight = null;
+		try {
+			var saved = JSON.parse(sessionStorage.getItem(storageKey));
+			if (saved && typeof saved.mode === 'string' && typeof saved.enabled === 'boolean' &&
+				typeof saved.started === 'number')
+				pending = saved;
+		} catch (e) {}
 
-			return Promise.all([getConfiguredBinPath(), callServiceList('AdGuardHome', true), redirectFlag]).then(function(results) {
-				var isRunning = coreIsRunning(results[1], results[0]);
-				setBadge(serviceBadge, 'AdGuardHome: ' + (isRunning ? _('RUNNING') : _('NOT RUNNING')), isRunning);
-				setBadge(redirectBadge, _('Redirect') + ': ' + (results[2].trim() === '1' ? _('Redirected') : _('Not redirect')),
-					results[2].trim() === '1');
+		function remember() {
+			try {
+				if (pending)
+					sessionStorage.setItem(storageKey, JSON.stringify(pending));
+				else
+					sessionStorage.removeItem(storageKey);
+			} catch (e) {}
+		}
+
+		function showPending(running) {
+			var label = Date.now() - pending.started >= 30000
+				? _('Switch not completed; check the log') : _('Switching');
+			if (typeof running === 'boolean')
+				setBadge(serviceBadge, running ? _('RUNNING') : _('NOT RUNNING'), running);
+			else
+				setBadge(serviceBadge, _('Checking service…'), 'pending');
+			setBadge(redirectBadge, label, 'pending');
+		}
+
+		function beginSwitch(target) {
+			generation++;
+			stable = 0;
+			nextRefresh = 0;
+			pending = { mode: target.mode, enabled: target.enabled, started: Date.now() };
+			remember();
+			showPending();
+		}
+
+		function cancelSwitch() {
+			generation++;
+			pending = null;
+			stable = 0;
+			nextRefresh = 0;
+			remember();
+			return refreshStatus();
+		}
+
+		function matches(info, running, target) {
+			return !info.busy && info.mode === target.mode && info.enabled === target.enabled &&
+				info.applied_enabled === target.enabled && running === target.enabled &&
+				(!target.enabled || info.applied_mode === target.mode) &&
+				info.redirected === (target.enabled && target.mode !== 'none');
+		}
+
+		function refreshStatus() {
+			if (inFlight)
+				return inFlight;
+			var currentGeneration = generation;
+			var requestedAt = Date.now();
+			inFlight = Promise.all([callRedirectStatus(), callServiceList('AdGuardHome', true)]).then(function(results) {
+				if (currentGeneration !== generation)
+					return;
+				var info = results[0];
+				var running = coreIsRunning(results[1], info.binpath);
+				// Recover switching feedback after navigation or an apply from another page.
+				if (!pending && (info.busy || info.mode !== info.applied_mode || info.enabled !== info.applied_enabled))
+					beginSwitch(info);
+				if (pending) {
+					stable = matches(info, running, pending) ? stable + 1 : 0;
+					// Two consecutive samples avoid declaring a short-lived process healthy.
+					if (stable < 2) {
+						showPending(running);
+						return;
+					}
+					pending = null;
+					remember();
+				}
+				setBadge(serviceBadge, running ? _('RUNNING') : _('NOT RUNNING'), running);
+				var active = info.redirected && running && info.mode === info.applied_mode;
+				var label = modeLabel(info.mode);
+				if (!info.enabled)
+					label += ' (' + _('Disabled') + ')';
+				else if (info.mode !== 'none' && !active)
+					label += ' (' + _('Not redirect') + ')';
+				setBadge(redirectBadge, label,
+					!info.enabled || info.mode === 'none' ? null : active);
 			}).catch(function() {
-				setBadge(serviceBadge, _('Status unavailable'), null);
-				setBadge(redirectBadge, _('Status unavailable'), null);
+				if (currentGeneration !== generation)
+					return;
+				stable = 0;
+				if (pending) {
+					showPending();
+					setBadge(serviceBadge, _('Status unavailable'), null);
+					setBadge(redirectBadge, _('Unable to read switch status') + ' (' + modeLabel(pending.mode) + ')', null);
+				} else {
+					setBadge(serviceBadge, _('Status unavailable'), null);
+					setBadge(redirectBadge, _('Status unavailable'), null);
+				}
+			}).then(function() {
+				nextRefresh = requestedAt + (pending ? 1000 : 3000);
+				inFlight = null;
 			});
-		}, 3);
+			return inFlight;
+		}
 
-		return { node: node, refresh: refreshCore };
+		if (pending)
+			showPending();
+		refreshCore();
+		refreshStatus();
+		poll.add(function() {
+			if (Date.now() >= nextRefresh)
+				return refreshStatus();
+		}, 1);
+
+		return { node: node, refresh: function() {
+			return Promise.all([refreshCore(), refreshStatus()]);
+		}, beginSwitch: beginSwitch, cancelSwitch: cancelSwitch };
 	}
 });

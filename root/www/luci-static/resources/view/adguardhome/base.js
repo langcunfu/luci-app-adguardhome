@@ -3,6 +3,7 @@
 'require form';
 'require poll';
 'require rpc';
+'require ui';
 'require view/adguardhome/status as status';
 
 var callInterfaces = rpc.declare({
@@ -28,12 +29,27 @@ var callStartCoreUpdate = rpc.declare({
 });
 
 return view.extend({
+	handleSaveApply: function(ev, mode) {
+		var target = {
+			mode: this.redirectOption.formvalue('AdGuardHome') || 'none',
+			enabled: this.enabledOption.formvalue('AdGuardHome') === '1'
+		};
+		this.sharedStatus.beginSwitch(target);
+		return this.handleSave(ev).then(function() {
+			ui.changes.apply(mode == '0');
+		}).catch(function(error) {
+			this.sharedStatus.cancelSwitch();
+			throw error;
+		}.bind(this));
+	},
+
 	load: function() {
 		return callInterfaces().catch(function() { return { interfaces: [] }; });
 	},
 
 	render: function(data) {
 		let m, s, o;
+		var self = this;
 		var interfaces = data.interfaces || [];
 
 		m = new form.Map('AdGuardHome');
@@ -52,6 +68,7 @@ return view.extend({
 			'enabled',
 			_('Enable')
 		);
+		this.enabledOption = o;
 		o.default = '0';
 		o.rmempty = false;
 
@@ -72,6 +89,7 @@ return view.extend({
 			_('AdGuardHome redirect mode')
 		);
 
+		this.redirectOption = o;
 		o.value('none', _('None'));
 		o.value('dnsmasq-upstream', _('Run as dnsmasq upstream server'));
 		o.value('redirect', _('Redirect port 53 to AdGuardHome'));
@@ -137,6 +155,7 @@ return view.extend({
 
 		return m.render().then(function(node) {
 			var sharedStatus = status.render();
+			self.sharedStatus = sharedStatus;
 
 			var updateButton = E('button', {
 				'class': 'btn cbi-button cbi-button-apply', 'type': 'button'

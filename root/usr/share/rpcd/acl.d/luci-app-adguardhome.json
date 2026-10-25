@@ -7,7 +7,7 @@
 			},
 			"ubus": {
 				"service": [ "list" ],
-				"luci.adguardhome": [ "getCoreInfo", "getCoreUpdate", "getInterfaces", "getRuntimeLog", "getManualConfig" ]
+				"luci.adguardhome": [ "getCoreInfo", "getRedirectStatus", "getCoreUpdate", "getInterfaces", "getRuntimeLog", "getManualConfig" ]
 			},
 			"uci": [ "AdGuardHome" ]
 		},

@@ -211,3 +211,18 @@ msgstr "磁盘上的配置已变化，请重新读取后再保存。"
 
 msgid "Unable to read runtime log"
 msgstr "无法读取运行日志"
+
+msgid "Switching"
+msgstr "正在切换"
+
+msgid "Checking service…"
+msgstr "正在确认服务状态…"
+
+msgid "Switch not completed; check the log"
+msgstr "切换尚未完成，请检查日志"
+
+msgid "Disabled"
+msgstr "已停用"
+
+msgid "Unable to read switch status"
+msgstr "无法读取切换状态"
