@@ -32,11 +32,11 @@ msgstr "通过防火墙转发 53 端口请求"
 msgid "Use port 53 instead of dnsmasq"
 msgstr "使用 53 端口替代 dnsmasq"
 
-msgid "Interfaces excluded from forwarding"
-msgstr "不参与转发的接口"
+msgid "Network devices excluded from forwarding"
+msgstr "不参与转发的网络设备"
 
-msgid "DNS requests arriving on these interfaces are not forwarded to AdGuardHome"
-msgstr "从这些接口进入的 DNS 请求不转发到 AdGuardHome"
+msgid "DNS requests arriving on these network devices are not forwarded to AdGuardHome"
+msgstr "从这些网络设备进入的 DNS 请求不转发到 AdGuardHome"
 
 msgid "Bin Path"
 msgstr "执行文件路径"

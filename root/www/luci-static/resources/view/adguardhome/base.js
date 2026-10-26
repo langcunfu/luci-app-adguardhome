@@ -100,8 +100,8 @@ return view.extend({
 		o = s.option(
 			form.DynamicList,
 			'wan_ifname',
-			_('Interfaces excluded from forwarding'),
-			_('DNS requests arriving on these interfaces are not forwarded to AdGuardHome')
+			_('Network devices excluded from forwarding'),
+			_('DNS requests arriving on these network devices are not forwarded to AdGuardHome')
 		);
 		o.depends('redirect', 'redirect');
 		o.retain = true;
