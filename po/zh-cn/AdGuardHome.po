@@ -18,7 +18,7 @@ msgid "Browser management port"
 msgstr "网页管理端口"
 
 msgid "DNS handling mode"
-msgstr "DNS 接入方式"
+msgstr "DNS 接管方式"
 
 msgid "Do not handle DNS"
 msgstr "不接管 DNS"
