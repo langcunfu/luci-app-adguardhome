@@ -51,11 +51,12 @@ jobs:
       - name: 整理 APK 产物
         run: bash scripts/collect-apks.sh
 
-      - name: 上传独立 APK
+      - name: 上传 APK 压缩包
         uses: actions/upload-artifact@v7
         with:
+          name: adguardhome-apks
           path: dist/*.apk
-          archive: false
+          archive: true
           if-no-files-found: error
 
       - name: 发布到 Releases
