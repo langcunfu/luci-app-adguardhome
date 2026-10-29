@@ -12,7 +12,7 @@ permissions:
 
 env:
   SDK_DIR: /builder
-  PKG_DIR_NAME: luci-app-adguardhome
+  PKG_DIR_NAME: luci-app-adguardhome-tk
 
 jobs:
   build:
