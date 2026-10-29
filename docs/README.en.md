@@ -17,7 +17,7 @@ Manage AdGuard Home in OpenWrt's LuCI interface. LuCI pages are rewritten in Jav
 > Run in the terminal of an OpenWrt router using the APK package manager:
 >
 > ```sh
-> uclient-fetch -O /tmp/install-adguardhome.sh https://raw.githubusercontent.com/w9315273/luci-app-adguardhome/main/install.sh && sh /tmp/install-adguardhome.sh
+> uclient-fetch -O /tmp/install-adguardhome.sh https://raw.githubusercontent.com/w9315273/luci-app-adguardhome/main/scripts/install.sh && sh /tmp/install-adguardhome.sh
 > ```
 
 ## Screenshots

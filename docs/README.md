@@ -17,7 +17,7 @@
 > 在使用 APK 包管理器的 OpenWrt 路由器终端执行：
 >
 > ```sh
-> uclient-fetch -O /tmp/install-adguardhome.sh https://raw.githubusercontent.com/w9315273/luci-app-adguardhome/main/install.sh && sh /tmp/install-adguardhome.sh
+> uclient-fetch -O /tmp/install-adguardhome.sh https://raw.githubusercontent.com/w9315273/luci-app-adguardhome/main/scripts/install.sh && sh /tmp/install-adguardhome.sh
 > ```
 
 ## 截图
