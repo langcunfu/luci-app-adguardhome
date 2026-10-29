@@ -33,7 +33,7 @@ endef
 define Package/luci-i18n-adguardhome-tk-zh-cn
 	SECTION:=luci
 	CATEGORY:=LuCI
-	SUBMENU:=3. Applications
+	HIDDEN:=1
 	TITLE:=AdGuardHome - Simplified Chinese translation
 	PKGARCH:=all
 	PROVIDES:=luci-i18n-adguardhome-zh-cn
