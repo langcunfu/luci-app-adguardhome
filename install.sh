@@ -1,34 +1,8 @@
 #!/bin/sh
 set -e
 
-REPO="w9315273/luci-app-adguardhome"
-
-echo "Getting latest version..."
-TAG=$(uclient-fetch -qO- "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null \
-  | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' | head -n1)
-
-[ -n "$TAG" ] || { echo "ERROR: Failed to get latest version"; exit 1; }
-
-case "$TAG" in
-  *-*) ;;
-  *) echo "ERROR: Unexpected tag format: $TAG"; exit 1 ;;
-esac
-
-VERSION=${TAG#v}
-VERSION=${VERSION%-*}-r${VERSION##*-}
-
-URL="https://github.com/${REPO}/releases/download/${TAG}/luci-app-adguardhome-${VERSION}.apk"
-
-echo "Version: $VERSION"
-echo "Downloading..."
-trap 'rm -f /tmp/agh.apk' EXIT
-uclient-fetch -qO /tmp/agh.apk "$URL"
-
-echo "Installing..."
-apk add --allow-untrusted /tmp/agh.apk
-
-echo "Refreshing LuCI..."
-rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null
-/etc/init.d/rpcd reload >/dev/null 2>&1
-
-echo "Done."
+# Keep installation commands from existing releases working.
+script=$(mktemp /tmp/install-adguardhome.XXXXXX)
+trap 'rm -f "$script"' EXIT
+uclient-fetch -O "$script" https://raw.githubusercontent.com/w9315273/luci-app-adguardhome/main/scripts/install.sh
+sh "$script"

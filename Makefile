@@ -1,17 +1,13 @@
 #
 # Copyright (C) 2025 w9315273
 #
-# This is free software, licensed under the MIT License.
-#
 
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=luci-app-adguardhome
 PKG_VERSION:=2.5.0
-PKG_RELEASE:=2
+PKG_RELEASE:=3
 
-PKG_LICENSE:=MIT
-PKG_LICENSE_FILES:=LICENSE
 PKG_MAINTAINER:=w9315273
 PKG_BUILD_DEPENDS:=luci-base/host
 
@@ -32,6 +28,20 @@ define Package/luci-app-adguardhome/description
 	This package does NOT include the AdGuardHome core binary.
 endef
 
+define Package/luci-i18n-adguardhome-zh-cn
+	SECTION:=luci
+	CATEGORY:=LuCI
+	SUBMENU:=3. Applications
+	TITLE:=AdGuardHome - Simplified Chinese translation
+	PKGARCH:=all
+	DEPENDS:=+luci-app-adguardhome
+	DEFAULT:=LUCI_LANG_zh_Hans
+endef
+
+define Package/luci-i18n-adguardhome-zh-cn/description
+	Simplified Chinese translation for luci-app-adguardhome.
+endef
+
 define Build/Prepare
 endef
 
@@ -44,7 +54,12 @@ endef
 
 define Package/luci-app-adguardhome/install
 	cp -pR ./root/* $(1)/
+endef
 
+define Package/luci-i18n-adguardhome-zh-cn/install
+	$(INSTALL_DIR) $(1)/etc/uci-defaults
+	echo "uci set luci.languages.zh_cn='简体中文 (Simplified Chinese)'; uci commit luci" \
+		> $(1)/etc/uci-defaults/luci-i18n-adguardhome-zh-cn
 	$(INSTALL_DIR) $(1)/usr/lib/lua/luci/i18n
 	po2lmo ./po/zh-cn/AdGuardHome.po \
 		$(1)/usr/lib/lua/luci/i18n/AdGuardHome.zh-cn.lmo
@@ -86,3 +101,5 @@ exit 0
 endef
 
 $(eval $(call BuildPackage,luci-app-adguardhome))
+
+$(eval $(call BuildPackage,luci-i18n-adguardhome-zh-cn))
